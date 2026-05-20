@@ -10,7 +10,11 @@ import { getSiteSettings, listAllProducts } from "@/lib/products"
 
 export const dynamic = "force-dynamic"
 
-export default async function AdminPage() {
+export default async function AdminPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ error?: string; saved?: string }>
+}) {
   const authenticated = await isAdminAuthenticated()
   if (!authenticated) {
     return (
@@ -23,6 +27,10 @@ export default async function AdminPage() {
 
   const [products, settings] = await Promise.all([listAllProducts(), getSiteSettings()])
   const hasDatabase = Boolean(process.env.DATABASE_URL)
+  const params = await searchParams
+  const errorMessage = params?.error
+  const savedMessage =
+    params?.saved === "product" ? "商品已保存" : params?.saved === "settings" ? "站点设置已保存" : null
 
   return (
     <>
@@ -51,6 +59,18 @@ export default async function AdminPage() {
           <div className="mb-6 flex gap-3 rounded-card border border-yuzu-100 bg-yuzu-100/[0.60] p-4 text-sm leading-6 text-yuzu-600">
             <Database className="mt-0.5 shrink-0" size={18} aria-hidden="true" />
             当前未配置 DATABASE_URL，后台展示的是演示数据；部署到源站并配置 Postgres 后会启用真实保存。
+          </div>
+        ) : null}
+
+        {errorMessage ? (
+          <div className="mb-6 rounded-card border border-red-200 bg-red-50 p-4 text-sm leading-6 text-red-700">
+            {errorMessage}
+          </div>
+        ) : null}
+
+        {savedMessage ? (
+          <div className="mb-6 rounded-card border border-aqua-100 bg-aqua-100/60 p-4 text-sm leading-6 text-aqua-600">
+            {savedMessage}
           </div>
         ) : null}
 

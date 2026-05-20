@@ -1,6 +1,6 @@
 "use server"
 
-import { StockStatus } from "@prisma/client"
+import { Prisma, StockStatus } from "@prisma/client"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 import { z } from "zod"
@@ -18,7 +18,7 @@ const productSchema = z.object({
   title: z.string().trim().min(1).max(80),
   subtitle: z.string().trim().min(1).max(160),
   description: z.string().trim().min(1).max(2000),
-  priceCny: z.string().trim().regex(/^\d+(\.\d{1,2})?$/, "价格格式应为 19.90"),
+  priceCny: z.preprocess(normalizePriceInput, z.string().regex(/^\d+\.\d{2}$/, "价格格式应为 19.90")),
   category: z.string().trim().min(1).max(40),
   tags: z.string().default(""),
   coverUrl: z.string().trim().url(),
@@ -48,6 +48,36 @@ function listFromTextarea(value: string) {
     .filter(Boolean)
 }
 
+function normalizePriceInput(value: unknown) {
+  const raw = String(value ?? "")
+    .trim()
+    .replace(/，/g, ",")
+    .replace(/。/g, ".")
+    .replace(/[￥¥\s,]/g, "")
+
+  if (!/^\d+(\.\d{0,2})?$/.test(raw)) return raw
+
+  const [yuan, cents = ""] = raw.split(".")
+  return `${yuan}.${cents.padEnd(2, "0")}`
+}
+
+function validationMessage(error: z.ZodError) {
+  return error.issues[0]?.message ?? "表单内容有误，请检查后再保存"
+}
+
+function redirectWithAdminError(message: string): never {
+  redirect(`/admin?error=${encodeURIComponent(message)}`)
+}
+
+function databaseErrorMessage(error: unknown) {
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    if (error.code === "P2002") return "slug 已被其他商品使用，请换一个后再保存"
+    if (error.code === "P2025") return "要操作的商品不存在，可能已经被删除"
+  }
+
+  return "保存失败，请稍后重试或检查服务器日志"
+}
+
 export async function loginAction(_prevState: { error?: string }, formData: FormData) {
   const password = String(formData.get("password") || "")
   if (!verifyAdminPassword(password)) {
@@ -64,7 +94,10 @@ export async function logoutAction() {
 
 export async function upsertProductAction(formData: FormData) {
   await requireAdmin()
-  const parsed = productSchema.parse(Object.fromEntries(formData.entries()))
+  const result = productSchema.safeParse(Object.fromEntries(formData.entries()))
+  if (!result.success) redirectWithAdminError(validationMessage(result.error))
+
+  const parsed = result.data
   const data = {
     slug: parsed.slug,
     title: parsed.title,
@@ -80,33 +113,51 @@ export async function upsertProductAction(formData: FormData) {
     sortOrder: parsed.sortOrder,
   }
 
-  if (parsed.id) {
-    await prisma.product.update({ where: { id: parsed.id }, data })
-  } else {
-    await prisma.product.create({ data })
+  try {
+    if (parsed.id) {
+      await prisma.product.update({ where: { id: parsed.id }, data })
+    } else {
+      await prisma.product.create({ data })
+    }
+  } catch (error) {
+    redirectWithAdminError(databaseErrorMessage(error))
   }
 
   revalidatePath("/")
   revalidatePath("/admin")
+  redirect("/admin?saved=product")
 }
 
 export async function deleteProductAction(formData: FormData) {
   await requireAdmin()
   const id = String(formData.get("id") || "")
   if (!id) return
-  await prisma.product.delete({ where: { id } })
+  try {
+    await prisma.product.delete({ where: { id } })
+  } catch (error) {
+    redirectWithAdminError(databaseErrorMessage(error))
+  }
   revalidatePath("/")
   revalidatePath("/admin")
+  redirect("/admin?saved=product")
 }
 
 export async function saveSettingsAction(formData: FormData) {
   await requireAdmin()
-  const parsed = settingsSchema.parse(Object.fromEntries(formData.entries()))
-  await prisma.siteSettings.upsert({
-    where: { id: "default" },
-    update: parsed,
-    create: { id: "default", ...parsed },
-  })
+  const result = settingsSchema.safeParse(Object.fromEntries(formData.entries()))
+  if (!result.success) redirectWithAdminError(validationMessage(result.error))
+
+  const parsed = result.data
+  try {
+    await prisma.siteSettings.upsert({
+      where: { id: "default" },
+      update: parsed,
+      create: { id: "default", ...parsed },
+    })
+  } catch {
+    redirectWithAdminError("站点设置保存失败，请稍后重试或检查服务器日志")
+  }
   revalidatePath("/")
   revalidatePath("/admin")
+  redirect("/admin?saved=settings")
 }
