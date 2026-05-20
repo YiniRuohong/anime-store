@@ -1,0 +1,131 @@
+name: Cloudflare fallback
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "auto checks GoEdge; cloudflare switches to proxied origin; goedge restores DNS-only GoEdge nodes"
+        required: true
+        type: choice
+        options:
+          - auto
+          - cloudflare
+          - goedge
+        default: auto
+
+concurrency:
+  group: cloudflare-fallback-shop
+  cancel-in-progress: false
+
+jobs:
+  switch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Switch DNS
+        shell: bash
+        env:
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CF_ZONE_ID: ${{ secrets.CF_ZONE_ID }}
+          MODE: ${{ inputs.mode || 'auto' }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CF_API_TOKEN:-}" ] || [ -z "${CF_ZONE_ID:-}" ]; then
+            echo "CF_API_TOKEN and CF_ZONE_ID are required."
+            exit 1
+          fi
+
+          domains=(shop.neuq-ani.me)
+          goedge_ips=(45.202.240.235 103.232.213.191 103.247.29.99 47.236.2.125)
+          origin_ip=202.61.246.240
+          health_host=shop.neuq-ani.me
+          health_path=/
+          api="https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID}/dns_records"
+
+          cf() {
+            curl -fsS -H "Authorization: Bearer ${CF_API_TOKEN}" -H "Content-Type: application/json" "$@"
+          }
+
+          delete_records() {
+            local name="$1"
+            cf "${api}?name=${name}&per_page=100" | jq -r '.result[].id' | while read -r id; do
+              [ -n "$id" ] && cf -X DELETE "${api}/${id}" >/dev/null
+            done
+          }
+
+          create_a() {
+            local name="$1"
+            local ip="$2"
+            local proxied="$3"
+            local ttl="$4"
+            jq -n \
+              --arg name "$name" \
+              --arg ip "$ip" \
+              --argjson proxied "$proxied" \
+              --argjson ttl "$ttl" \
+              '{type:"A", name:$name, content:$ip, proxied:$proxied, ttl:$ttl}' |
+              cf -X POST --data @- "$api" >/dev/null
+          }
+
+          current_is_cloudflare() {
+            local proxied_count
+            proxied_count="$(cf "${api}?name=shop.neuq-ani.me&type=A&per_page=100" | jq '[.result[] | select(.proxied == true)] | length')"
+            [ "$proxied_count" -gt 0 ]
+          }
+
+          healthy_goedge_ips() {
+            for ip in "${goedge_ips[@]}"; do
+              if curl -fsS --max-time 12 --retry 1 --resolve "${health_host}:443:${ip}" "https://${health_host}${health_path}" >/dev/null; then
+                echo "$ip"
+              fi
+            done
+          }
+
+          switch_cloudflare() {
+            for domain in "${domains[@]}"; do
+              delete_records "$domain"
+              create_a "$domain" "$origin_ip" true 1
+            done
+            echo "DNS switched to Cloudflare proxied origin mode."
+          }
+
+          switch_goedge() {
+            local ips=("$@")
+            if [ "${#ips[@]}" -eq 0 ]; then
+              ips=("${goedge_ips[@]}")
+            fi
+            for domain in "${domains[@]}"; do
+              delete_records "$domain"
+              for ip in "${ips[@]}"; do
+                create_a "$domain" "$ip" false 60
+              done
+            done
+            echo "DNS switched to GoEdge DNS-only mode: ${ips[*]}"
+          }
+
+          if [ "$MODE" = "auto" ]; then
+            mapfile -t healthy_ips < <(healthy_goedge_ips)
+            echo "Healthy GoEdge IPs: ${healthy_ips[*]:-(none)}"
+            if [ "${#healthy_ips[@]}" -eq 0 ]; then
+              switch_cloudflare
+            elif current_is_cloudflare; then
+              echo "Cloudflare fallback is active; keeping it active. Use mode=goedge after confirming recovery."
+            else
+              switch_goedge "${healthy_ips[@]}"
+            fi
+            exit 0
+          fi
+
+          if [ "$MODE" = "cloudflare" ]; then
+            switch_cloudflare
+            exit 0
+          fi
+
+          if [ "$MODE" = "goedge" ]; then
+            switch_goedge
+            exit 0
+          fi
+
+          echo "Unknown mode: $MODE"
+          exit 1

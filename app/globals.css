@@ -1,0 +1,97 @@
+@import "@chinese-fonts/lxgwwenkai/dist/LXGWWenKai-Regular/result.css";
+@import "@chinese-fonts/lxgwwenkai/dist/LXGWWenKai-Medium/result.css";
+@import "@chinese-fonts/lxgwwenkai/dist/LXGWWenKai-Light/result.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --background: #fff8fb;
+  --foreground: #182033;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--foreground);
+  background:
+    linear-gradient(135deg, rgba(255, 248, 251, 0.94), rgba(238, 252, 251, 0.9)),
+    radial-gradient(circle at 12% 12%, rgba(253, 164, 200, 0.34), transparent 28%),
+    radial-gradient(circle at 88% 0%, rgba(67, 198, 188, 0.2), transparent 24%),
+    #fff8fb;
+  font-family: "LXGW WenKai", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+@layer components {
+  .container-page {
+    @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8;
+  }
+
+  .surface {
+    @apply border border-white/70 bg-white/[0.78] shadow-panel backdrop-blur-xl;
+  }
+
+  .icon-button {
+    @apply inline-flex h-10 w-10 items-center justify-center rounded-card border border-sakura-200 bg-white text-ink-700 transition hover:border-sakura-400 hover:text-sakura-600;
+  }
+
+  .primary-button {
+    @apply inline-flex items-center justify-center gap-2 rounded-card bg-ink-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-sakura-600 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .secondary-button {
+    @apply inline-flex items-center justify-center gap-2 rounded-card border border-sakura-200 bg-white px-4 py-2.5 text-sm font-medium text-ink-900 transition hover:border-sakura-400 hover:text-sakura-600;
+  }
+
+  .field {
+    @apply w-full rounded-card border-slate-200 bg-white/90 text-sm shadow-sm focus:border-sakura-400 focus:ring-sakura-300;
+  }
+
+  .label {
+    @apply text-xs font-medium uppercase tracking-normal text-ink-500;
+  }
+
+  .sakura-petal {
+    position: fixed;
+    top: -24px;
+    width: 14px;
+    height: 14px;
+    border-radius: 150% 0 150% 0;
+    background: radial-gradient(circle, rgba(253, 164, 200, 0.85) 0%, rgba(236, 72, 153, 0.35) 100%);
+    opacity: 0.62;
+    pointer-events: none;
+    z-index: 10;
+    animation: petal-fall linear infinite;
+  }
+}
+
+@keyframes petal-fall {
+  0% {
+    transform: translateY(-24px) translateX(0) rotate(0deg);
+    opacity: 0;
+  }
+  12% {
+    opacity: 0.62;
+  }
+  100% {
+    transform: translateY(110vh) translateX(40px) rotate(680deg);
+    opacity: 0;
+  }
+}

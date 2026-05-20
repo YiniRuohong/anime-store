@@ -1,0 +1,11 @@
+.env
+.env.*
+!.env.example
+.next
+.deploy
+node_modules
+dist
+coverage
+*.log
+.DS_Store
+tsconfig.tsbuildinfo

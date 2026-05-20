@@ -1,0 +1,46 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum StockStatus {
+  IN_STOCK
+  LIMITED
+  SOLD_OUT
+  HIDDEN
+}
+
+model Product {
+  id          String      @id @default(cuid())
+  slug        String      @unique
+  title       String
+  subtitle    String
+  description String
+  priceCny    Decimal     @db.Decimal(10, 2)
+  category    String
+  tags        String[]    @default([])
+  coverUrl    String
+  galleryUrls String[]    @default([])
+  stockStatus StockStatus @default(IN_STOCK)
+  visible     Boolean     @default(true)
+  sortOrder   Int         @default(0)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([visible, sortOrder])
+  @@index([category])
+}
+
+model SiteSettings {
+  id           String   @id @default("default")
+  alipayQrUrl  String
+  orderGuide   String
+  contactText  String
+  announcement String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}

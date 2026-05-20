@@ -1,0 +1,56 @@
+name: Deploy production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: production-shop
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run build
+      - run: bash scripts/package-standalone.sh
+
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "${{ secrets.ORIGIN_SSH_KEY }}" > ~/.ssh/origin_key
+          chmod 600 ~/.ssh/origin_key
+          ssh-keyscan -p "${{ secrets.ORIGIN_SSH_PORT || '22' }}" "${{ secrets.ORIGIN_SSH_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Upload and restart
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${{ secrets.ORIGIN_SSH_PORT || '22' }}"
+          HOST="${{ secrets.ORIGIN_SSH_HOST }}"
+          USER="${{ secrets.ORIGIN_SSH_USER }}"
+          TARGET="/opt/neuq-ani/laser_webpanel/deploy/sites/shop"
+          REMOTE_ARCHIVE="/tmp/anime-store-${GITHUB_SHA}.tgz"
+          scp -i ~/.ssh/origin_key -P "$PORT" .deploy/anime-store-standalone.tgz "$USER@$HOST:$REMOTE_ARCHIVE"
+          ssh -i ~/.ssh/origin_key -p "$PORT" "$USER@$HOST" "TARGET='$TARGET' RELEASE_ID='${GITHUB_SHA}' bash -s -- '$REMOTE_ARCHIVE'" < scripts/deploy-origin.sh
+
+      - name: Verify production
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSI --max-time 20 https://shop.neuq-ani.me/ | tee /tmp/headers.txt
+          ! grep -i 'x-vercel' /tmp/headers.txt

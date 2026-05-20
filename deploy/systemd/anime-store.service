@@ -1,0 +1,17 @@
+[Unit]
+Description=NEUQ Anime Store
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/neuq-ani/laser_webpanel/deploy/sites/shop/current
+EnvironmentFile=/opt/neuq-ani/laser_webpanel/deploy/sites/shop/.env.production
+Environment=NODE_ENV=production
+Environment=PORT=3100
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
