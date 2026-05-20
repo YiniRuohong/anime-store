@@ -1,8 +1,8 @@
-import Image from "next/image"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { ArrowLeft, ShoppingCart } from "lucide-react"
 import { Petals } from "@/components/petals"
+import { ProductGallery } from "@/components/product-gallery"
 import { SiteFooter } from "@/components/site-footer"
 import { SiteHeader } from "@/components/site-header"
 import { formatPrice, stockLabel, stockTone } from "@/lib/format"
@@ -16,6 +16,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
   if (!product) notFound()
 
   const unavailable = product.stockStatus === "SOLD_OUT" || product.stockStatus === "HIDDEN"
+  const galleryImages = [product.coverUrl, ...product.galleryUrls]
 
   return (
     <>
@@ -27,11 +28,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
           返回商品目录
         </Link>
         <section className="grid gap-8 lg:grid-cols-[0.95fr_1.05fr]">
-          <div className="surface overflow-hidden rounded-card">
-            <div className="relative aspect-[4/3] bg-sakura-50">
-              <Image src={product.coverUrl} alt={product.title} fill className="object-cover" sizes="(min-width: 1024px) 48vw, 100vw" unoptimized />
-            </div>
-          </div>
+          <ProductGallery images={galleryImages} title={product.title} />
           <div className="surface rounded-card p-6 sm:p-8">
             <div className="flex flex-wrap items-center gap-3">
               <span className={`rounded-full px-3 py-1 text-xs ${stockTone(product.stockStatus)}`}>
