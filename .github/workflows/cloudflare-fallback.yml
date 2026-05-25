@@ -32,7 +32,11 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${CF_API_TOKEN:-}" ] || [ -z "${CF_ZONE_ID:-}" ]; then
-            echo "CF_API_TOKEN and CF_ZONE_ID are required."
+            if [ "${GITHUB_EVENT_NAME:-}" = "schedule" ] && [ "${MODE:-auto}" = "auto" ]; then
+              echo "::notice::Cloudflare fallback skipped because CF_API_TOKEN or CF_ZONE_ID is not configured."
+              exit 0
+            fi
+            echo "::error::CF_API_TOKEN and CF_ZONE_ID are required for manual Cloudflare fallback runs."
             exit 1
           fi
 
